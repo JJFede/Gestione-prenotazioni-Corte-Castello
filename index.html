@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pannello Gestione Tavoli Salone</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #e74c3c;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+            --bg-light: #f8f9fa;
+            --border: #bdc3c7;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-light);
+            color: #333;
+        }
+
+        .container { max-width: 1350px; margin: 0 auto; }
+        h1, h3 { color: var(--primary); margin-bottom: 15px; }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-layout { grid-template-columns: 1fr; }
+        }
+
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
+        }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        input[type="text"], input[type="number"], select {
+            width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box;
+        }
+
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 6px;
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            padding: 8px;
+            background: #fff;
+            border-radius: 4px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #f1f2f6;
+            border: 1px solid #ced6e0;
+            padding: 8px 10px;
+            font-size: 0.85em;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .checkbox-label:hover { background: #e4e7eb; }
+        .checkbox-label input { margin-right: 8px; }
+        .checkbox-label.selected { background: #3498db; color: white; border-color: #2980b9; }
+        .checkbox-label.parziale { border-color: var(--warning); background: #fff9db; color: #665200; }
+        .checkbox-label.parziale.selected { background: #2980b9; color: white; }
+        .checkbox-label.full { background: #e74c3c; color: white; opacity: 0.5; cursor: not-allowed; }
+        .checkbox-label .badge { font-size: 0.8em; background: rgba(0,0,0,0.08); padding: 2px 6px; border-radius: 10px; }
+
+        /* Planimetria Strutturata (18m x 7m) */
+        .planimetria-scroll { overflow-x: auto; background: white; padding: 10px; border-radius: 6px; border: 1px solid var(--border); }
+        .mappa-salone {
+            display: grid;
+            grid-template-columns: 140px 1fr 60px 1fr 100px; 
+            border: 3px solid var(--primary);
+            background: #ffffff;
+            width: 1150px;
+            min-height: 420px;
+        }
+
+        .zona-intrattenimento {
+            background: #ffeaa7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.9em;
+            border-right: 2px dashed var(--border);
+            color: #d35400;
+            padding: 10px;
+        }
+
+        .corridoio-verticale {
+            background: #dfe6e9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8em;
+            color: #7f8c8d;
+            text-align: center;
+            writing-mode: vertical-lr;
+            border-left: 2px dashed #b2bec3;
+            border-right: 2px dashed #b2bec3;
+            letter-spacing: 2px;
+        }
+
+        .lato-intrattenimento-8t { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(4, 1fr); gap: 12px; padding: 15px; }
+        .lato-opposto-12t { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 12px; padding: 15px; }
+        .veranda-zona { background: #e8f8f5; border-left: 2px dashed #16a085; display: grid; grid-template-columns: 1fr; grid-template-rows: repeat(4, 1fr); gap: 12px; padding: 15px 8px; }
+
+        .tavolo {
+            background: #f1f2f6;
+            border: 2px solid #ced6e0;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            font-size: 0.75em;
+            font-weight: bold;
+            padding: 6px;
+            min-height: 80px;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+
+        .tavolo.parziale { background: #fff9db; border-color: var(--warning); color: #665200; }
+        .tavolo.completo { background: #ffdee2; border-color: var(--accent); color: #c0392b; }
+        
+        .tavolo .tavolo-header { border-bottom: 1px solid rgba(0,0,0,0.1); width: 100%; text-align: center; padding-bottom: 2px; margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .tavolo .lista-coabitanti { width: 100%; text-align: left; font-weight: normal; font-size: 0.85em; overflow-y: auto; max-height: 48px; }
+        .tavolo .item-ospite { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+
+        .badge-warning { background: #e67e22; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; font-weight: bold; }
+
+        table { width: 100%; border-collapse: collapse; background: white; margin-top: 15px; }
+        th, td { border: 1px solid var(--border); padding: 10px; text-align: left; font-size: 0.9em; }
+        th { background: var(--primary); color: white; }
+        tr:nth-child(even) { background: #f2f2f2; }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print, button, .actions-cell { display: none !important; }
+            .grid-layout { grid-template-columns: 1fr; }
+            .panel { box-shadow: none; border: none; padding: 0; }
+            .mappa-salone { width: 100%; page-break-inside: avoid; }
+            table { page-break-before: always; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="grid-layout">
+        
+        <!-- PANNELLO INPUT -->
+        <div class="panel">
+            <div class="no-print">
+                <h3>1. Spazio e Comfort</h3>
+                <div class="form-group">
+                    <label><input type="checkbox" id="chkVeranda" onchange="toggleVeranda()"> Attiva Area Veranda (+4 Tavoli)</label>
+                </div>
+                <div class="form-group">
+                    <label>Capienza massima tavolo:</label>
+                    <select id="selCapienza" onchange="cambiaCapienzaMantenendoGruppi()">
+                        <option value="6">6 Persone (Sedute Larghe)</option>
+                        <option value="8" selected>8 Persone (Sedute Strette)</option>
+                    </select>
+                </div>
+                <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+                
+                <h3 id="form-title">2. Gestione Gruppo</h3>
+                <form id="formPrenotazione" onsubmit="salvaDati(event)">
+                    <input type="hidden" id="edit-index" value="-1">
+                    <div class="form-group">
+                        <label>Capogruppo / Compagnia:</label>
+                        <input type="text" id="txtCapogruppo" required placeholder="Es. Rossi Mario">
+                    </div>
+                    <div class="form-group">
+                        <label>Numero Persone:</label>
+                        <input type="number" id="numOspiti" min="1" required oninput="aggiornaListaCheckboxTavoli()">
+                    </div>
+                    <div class="form-group">
+                        <label>Seleziona Tavoli (La coabitazione è attiva):</label>
+                        <div class="checkbox-grid" id="container-checkbox-tavoli"></div>
+                    </div>
+                    <div class="btn-group">
+                        <button type="submit" class="btn-success" id="btn-invia">Inserisci</button>
+                        <button type="button" class="btn-danger hidden" id="btn-annulla" onclick="resettaForm()">Annulla</button>
+                    </div>
+                </form>
+                <hr style="margin:15px 0; border:0; border-top:1px solid #eee;">
+            </div>
+
+            <h3>Stato Riempimento</h3>
+            <p style="font-size:0.9em; margin-bottom:5px;">Posti Totali Occupati: <strong id="lblPostiOccupati">0</strong></p>
+            <p style="font-size:0.9em; margin-bottom:15px;">Stato Tavoli Liberi: <strong id="lblTavoliLiberi">20/20</strong></p>
+            
+            <div class="no-print" style="display:flex; flex-direction:column; gap:10px;">
+                <button class="btn-primary" onclick="window.print()">🖨 Esporta / Stampa PDF</button>
+                <button class="btn-danger" onclick="svuotaInteraSala()" style="background:#d63031;">🗑️ Svuota Intera Sala</button>
+            </div>
+        </div>
+
+        <!-- PLANIMETRIA REALISTICA (18x7) -->
+        <div class="panel">
+            <h3>3. Layout Planimetrico Omogeneo (18m x 7m)</h3>
+            <div class="planimetria-scroll">
+                <div class="mappa-salone">
+                    
+                    <div class="zona-intrattenimento">ZONA<br>INTRATTENIMENTO<br>(3m x 7m)</div>
+                    
+                    <div class="lato-intrattenimento-8t">
+                        <div class="tavolo" id="map-T1"><div class="tavolo-header"><span>T1</span><span class="occup-badge" id="badge-T1">0/8</span></div><div class="lista-coabitanti" id="list-T1"></div></div>
+                        <div class="tavolo" id="map-T2"><div class="tavolo-header"><span>T2</span><span class="occup-badge" id="badge-T2">0/8</span></div><div class="lista-coabitanti" id="list-T2"></div></div>
+                        <div class="tavolo" id="map-T3"><div class="tavolo-header"><span>T3</span><span class="occup-badge" id="badge-T3">0/8</span></div><div class="lista-coabitanti" id="list-T3"></div></div>
+                        <div class="tavolo" id="map-T4"><div class="tavolo-header"><span>T4</span><span class="occup-badge" id="badge-T4">0/8</span></div><div class="lista-coabitanti" id="list-T4"></div></div>
+                        <div class="tavolo" id="map-T5"><div class="tavolo-header"><span>T5</span><span class="occup-badge" id="badge-T5">0/8</span></div><div class="lista-coabitanti" id="list-T5"></div></div>
+                        <div class="tavolo" id="map-T6"><div class="tavolo-header"><span>T6</span><span class="occup-badge" id="badge-T6">0/8</span></div><div class="lista-coabitanti" id="list-T6"></div></div>
+                        <div class="tavolo" id="map-T7"><div class="tavolo-header"><span>T7</span><span class="occup-badge" id="badge-T7">0/8</span></div><div class="lista-coabitanti" id="list-T7"></div></div>
+                        <div class="tavolo" id="map-T8"><div class="tavolo-header"><span>T8</span><span class="occup-badge" id="badge-T8">0/8</span></div><div class="lista-coabitanti" id="list-T8"></div></div>
+                    </div>
+
+                    <div class="corridoio-verticale">🚶 CORRIDOIO DI SICUREZZA (Passaggio Libero 2m) 🚶</div>
+
+                    <div class="lato-opposto-12t">
+                        <div class="tavolo" id="map-T9"><div class="tavolo-header"><span>T9</span><span class="occup-badge" id="badge-T9">0/8</span></div><div class="lista-coabitanti" id="list-T9"></div></div>
+                        <div class="tavolo" id="map-T10"><div class="tavolo-header"><span>T10</span><span class="occup-badge" id="badge-T10">0/8</span></div><div class="lista-coabitanti" id="list-T10"></div></div>
+                        <div class="tavolo" id="map-T11"><div class="tavolo-header"><span>T11</span><span class="occup-badge" id="badge-T11">0/8</span></div><div class="lista-coabitanti" id="list-T11"></div></div>
+                        <div class="tavolo" id="map-T12"><div class="tavolo-header"><span>T12</span><span class="occup-badge" id="badge-T12">0/8</span></div><div class="lista-coabitanti" id="list-T12"></div></div>
+                        <div class="tavolo" id="map-T13"><div class="tavolo-header"><span>T13</span><span class="occup-badge" id="badge-T13">0/8</span></div><div class="lista-coabitanti" id="list-T13"></div></div>
+                        <div class="tavolo" id="map-T14"><div class="tavolo-header"><span>T14</span><span class="occup-badge" id="badge-T14">0/8</span></div><div class="lista-coabitanti" id="list-T14"></div></div>
+                        <div class="tavolo" id="map-T15"><div class="tavolo-header"><span>T15</span><span class="occup-badge" id="badge-T15">0/8</span></div><div class="lista-coabitanti" id="list-T15"></div></div>
+                        <div class="tavolo" id="map-T16"><div class="tavolo-header"><span>T16</span><span class="occup-badge" id="badge-T16">0/8</span></div><div class="lista-coabitanti" id="list-T16"></div></div>
+                        <div class="tavolo" id="map-T17"><div class="tavolo-header"><span>T17</span><span class="occup-badge" id="badge-T17">0/8</span></div><div class="lista-coabitanti" id="list-T17"></div></div>
+                        <div class="tavolo" id="map-T18"><div class="tavolo-header"><span>T18</span><span class="occup-badge" id="badge-T18">0/8</span></div><div class="lista-coabitanti" id="list-T18"></div></div>
+                        <div class="tavolo" id="map-T19"><div class="tavolo-header"><span>T19</span><span class="occup-badge" id="badge-T19">0/8</span></div><div class="lista-coabitanti" id="list-T19"></div></div>
+                        <div class="tavolo" id="map-T20"><div class="tavolo-header"><span>T20</span><span class="occup-badge" id="badge-T20">0/8</span></div><div class="lista-coabitanti" id="list-T20"></div></div>
+                    </div>
+
+                    <div class="veranda-zona hidden" id="map-zona-veranda">
+                        <div class="tavolo" id="map-V1"><div class="tavolo-header"><span>V1</span><span class="occup-badge" id="badge-V1">0/8</span></div><div class="lista-coabitanti" id="list-V1"></div></div>
+                        <div class="tavolo" id="map-V2"><div class="tavolo-header"><span>V2</span><span class="occup-badge" id="badge-V2">0/8</span></div><div class="lista-coabitanti" id="list-V2"></div></div>
+                        <div class="tavolo" id="map-V3"><div class="tavolo-header"><span>V3</span><span class="occup-badge" id="badge-V3">0/8</span></div><div class="lista-coabitanti" id="list-V3"></div></div>
+                        <div class="tavolo" id="map-V4"><div class="tavolo-header"><span>V4</span><span class="occup-badge" id="badge-V4">0/8</span></div><div class="lista-coabitanti" id="list-V4"></div></div>
+                    </div>
+
+                </div>
+            </div>
+            <div style="margin-top:10px; font-size:0.85em; color:#7f8c8d;" class="no-print">
+                <span style="display:inline-block; width:12px; height:12px; background:#f1f2f6; border:1px solid #ced6e0;"></span> Vuoto &nbsp;&nbsp;
+                <span style="display:inline-block; width:12px; height:12px; background:#fff9db; border:1px solid var(--warning);"></span> Parzialmente Occupato (Condivisibile) &nbsp;&nbsp;
+                <span style="display:inline-block; width:12px; height:12px; background:#ffdee2; border:1px solid var(--accent);"></span> Completamente Pieno
+            </div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>4. Registro Prenotazioni Attive</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Capogruppo</th>
+                    <th>Ospiti</th>
+                    <th>Tavoli Assegnati</th>
+                    <th class="actions-cell">Azioni</th>
+                </tr>
+            </thead>
+            <tbody id="lista-prenotazioni-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let db = []; 
+    const tavoliSalone = Array.from({length: 20}, (_, i) => `T${i+1}`);
+    const tavoliVeranda = ['V1', 'V2', 'V3', 'V4'];
+
+    function caricaDatiDaMemoria() {
+        const datiSalvati = localStorage.getItem('gestione_tavoli_db');
+        const verandaSalvata = localStorage.getItem('gestione_tavoli_veranda');
+        const capienzaSalvata = localStorage.getItem('gestione_tavoli_capienza');
+
+        if(datiSalvati) db = JSON.parse(datiSalvati);
+        if(verandaSalvata === 'true') document.getElementById('chkVeranda').checked = true;
+        if(capienzaSalvata) document.getElementById('selCapienza').value = capienzaSalvata;
+
+        toggleVerandaIniziale();
+    }
+
+    function salvaInMemoria() {
+        localStorage.setItem('gestione_tavoli_db', JSON.stringify(db));
+        localStorage.setItem('gestione_tavoli_veranda', document.getElementById('chkVeranda').checked);
+        localStorage.setItem('gestione_tavoli_capienza', document.getElementById('selCapienza').value);
+    }
+
+    function getTavoliTotali() {
+        const verandaAttiva = document.getElementById('chkVeranda').checked;
+        return verandaAttiva ? [...tavoliSalone, ...tavoliVeranda] : [...tavoliSalone];
+    }
+
+    function toggleVeranda() {
+        const vZona = document.getElementById('map-zona-veranda');
+        if(document.getElementById('chkVeranda').checked) vZona.classList.remove('hidden');
+        else vZona.classList.add('hidden');
+        salvaInMemoria();
+        aggiornaListaCheckboxTavoli();
+    }
+
+    function toggleVerandaIniziale() {
+        const vZona = document.getElementById('map-zona-veranda');
+        if(document.getElementById('chkVeranda').checked) vZona.classList.remove('hidden');
+        else vZona.classList.add('hidden');
+    }
+
+    function cambiaCapienzaMantenendoGruppi() {
+        db.forEach(p => { p.tavoli = []; });
+        resettaForm();
+        salvaInMemoria();
+        aggiornaListaCheckboxTavoli();
+    }
+
+    function svuotaInteraSala() {
+        if(confirm("Attenzione: vuoi davvero cancellare permanentemente tutte le prenotazioni e svuotare la sala?")) {
+            localStorage.clear();
+            db = [];
+            document.getElementById('chkVeranda').checked = false;
+            document.getElementById('selCapienza').value = "8";
+            toggleVerandaIniziale();
+            resettaForm();
+            aggiornaListaCheckboxTavoli();
+        }
+    }
+
+    function calcolaMappaOccupazionePosti(escludiIndex = -1) {
+        let mappaPosti = {};
+        getTavoliTotali().forEach(id => mappaPosti[id] = 0);
+
+        db.forEach((p, idx) => {
+            if (idx !== escludiIndex && p.tavoli) {
+                p.tavoli.forEach(tavoloId => {
+                    if (mappaPosti[tavoloId] !== undefined) mappaPosti[tavoloId] += p.ospiti;
+                });
+            }
+        });
+        return mappaPosti;
+    }
+
+    function aggiornaListaCheckboxTavoli() {
+        const container = document.getElementById('container-checkbox-tavoli');
+        const capienzaMax = parseInt(document.getElementById('selCapienza').value);
+        const editIdx = parseInt(document.getElementById('edit-index').value);
+
+        const selezionatiOra = Array.from(container.querySelectorAll('input:checked')).map(c => c.value);
+        const mappaPostiOccupati = calcolaMappaOccupazionePosti(editIdx);
+
+        container.innerHTML = '';
+        getTavoliTotali().forEach(id => {
+            const occupatiAltri = mappaPostiOccupati[id] || 0;
+            const disponibili = capienzaMax - occupatiAltri;
+
+            const label = document.createElement('label');
+            label.className = 'checkbox-label';
+            label.id = `lbl-chk-${id}`;
+
+            const isFull = disponibili <= 0;
+            
+            label.innerHTML = `
+                <div>
+                    <input type="checkbox" value="${id}" ${isFull ? 'disabled' : ''} onchange="gestisciClickCheckbox('${id}')">
+                    <span>Tavolo ${id}</span>
+                </div>
+                <span class="badge">${disponibili} posti liberi</span>
+            `;
+
+            if (isFull) {
+                label.classList.add('full');
+            } else {
+                if (occupatiAltri > 0) label.classList.add('parziale');
+                if (selezionatiOra.includes(id) || (editIdx !== -1 && db[editIdx].tavoli && db[editIdx].tavoli.includes(id))) {
+                    label.classList.add('selected');
+                    label.querySelector('input').checked = true;
+                }
+            }
+            container.appendChild(label);
+        });
+
+        disegnaMappaGraficaEContatori();
+        disegnaTabella();
+    }
+
+    function gestisciClickCheckbox(id) {
+        const lbl = document.getElementById(`lbl-chk-${id}`);
+        const chk = lbl.querySelector('input');
+        if(chk.checked) lbl.classList.add('selected');
+        else lbl.classList.remove('selected');
+    }
+
+    function salvaDati(e) {
+        e.preventDefault();
+        const capogruppo = document.getElementById('txtCapogruppo').value.trim();
+        const ospiti = parseInt(document.getElementById('numOspiti').value);
+        const capienzaMax = parseInt(document.getElementById('selCapienza').value);
+        const editIdx = parseInt(document.getElementById('edit-index').value);
+
+        const tavoliScelti = Array.from(document.getElementById('container-checkbox-tavoli').querySelectorAll('input:checked')).map(c => c.value);
+
+        if(tavoliScelti.length === 0) { alert("Seleziona almeno un tavolo."); return; }
+
+        const mappaPostiOccupati = calcolaMappaOccupazionePosti(editIdx);
+        let spazioDisponibileTotale = 0;
+        
+        for (let tId of tavoliScelti) {
+            const occupati = mappaPostiOccupati[tId] || 0;
+            const liberiSuTavolo = capienzaMax - occupati;
+            spazioDisponibileTotale += liberiSuTavolo;
+
+            if (tavoliScelti.length === 1 && ospiti > liberiSuTavolo) {
+                alert(`Il Tavolo ${tId} ha solo ${liberiSuTavolo} posti rimasti. Seleziona più tavoli per dividere il gruppo.`);
+                return;
+            }
+        }
+
+        if (ospiti > spazioDisponibileTotale) {
+            alert(`I tavoli scelti hanno solo ${spazioDisponibileTotale} posti liberi. Ne servono ${ospiti}.`);
+            return;
+        }
+
+        const payload = { capogruppo, ospiti, tavoli: tavoliScelti };
+        if(editIdx === -1) db.push(payload);
+        else db[editIdx] = payload;
+
+        resettaForm();
+        salvaInMemoria(); 
+        aggiornaListaCheckboxTavoli();
+    }
+
+    function disegnaMappaGraficaEContatori() {
+        const capienzaMax = parseInt(document.getElementById('selCapienza').value);
+        
+        [...tavoliSalone, ...tavoliVeranda].forEach(id => {
+            const el = document.getElementById(`map-${id}`);
+            if(el) {
+                el.className = 'tavolo';
+                document.getElementById(`badge-${id}`).textContent = `0/${capienzaMax}`;
+                document.getElementById(`list-${id}`).innerHTML = '';
+            }
+        });
+
+        let totaliPostiSala = 0;
+        let mappaPostiOccupati = calcolaMappaOccupazionePosti();
+        let tavoliInteramenteLiberi = getTavoliTotali().length;
+
+        db.forEach(p => {
+            totaliPostiSala += p.ospiti;
+            if(p.tavoli) {
+                p.tavoli.forEach(id => {
+                    const listEl = document.getElementById(`list-${id}`);
+                    if(listEl) {
+                        const item = document.createElement('div');
+                        item.className = 'item-ospite';
+                        item.innerHTML = `• <strong>${p.capogruppo}</strong> (${p.ospiti})`;
+                        listEl.appendChild(item);
+                    }
+                });
+            }
+        });
+
+        getTavoliTotali().forEach(id => {
+            const occupati = mappaPostiOccupati[id] || 0;
+            const el = document.getElementById(`map-${id}`);
+            const badge = document.getElementById(`badge-${id}`);
+
+            if(badge) badge.textContent = `${occupati}/${capienzaMax}`;
+
+            if(el) {
+                if(occupati === 0) {
+                    // Vuoto
+                } else if(occupati < capienzaMax) {
+                    el.classList.add('parziale');
+                    tavoliInteramenteLiberi--;
+                } else {
+                    el.classList.add('completo');
+                    tavoliInteramenteLiberi--;
+                }
+            }
+        });
+
+        document.getElementById('lblPostiOccupati').textContent = totaliPostiSala;
+        document.getElementById('lblTavoliLiberi').textContent = `${tavoliInteramenteLiberi} / ${getTavoliTotali().length}`;
+    }
+
+    function disegnaTabella() {
+        const body = document.getElementById('lista-prenotazioni-body');
+        body.innerHTML = '';
+        if(db.length === 0) {
+            body.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#95a5a6;">Nessuna prenotazione attiva.</td></tr>`;
+            return;
+        }
+        db.forEach((p, idx) => {
+            const tr = document.createElement('tr');
+            
+            let stringaTavoli = '';
+            if(!p.tavoli || p.tavoli.length === 0) {
+                stringaTavoli = `<span class="badge-warning">Tavoli da riassegnare ⚠️</span>`;
+            } else {
+                stringaTavoli = p.tavoli.map(t => `<span style="background:#2c3e50; color:white; padding:2px 6px; border-radius:3px; font-size:0.85em; margin-right:3px; display:inline-block;">Tavolo ${t}</span>`).join('');
+            }
+
+            tr.innerHTML = `
+                <td><strong>${p.capogruppo}</strong></td>
+                <td>${p.ospiti} persone</td>
+                <td>${stringaTavoli}</td>
+                <td class="actions-cell">
+                    <button class="btn-primary" onclick="avviaModifica(${idx})">Modifica / Riassegna</button>
+                    <button class="btn-danger" onclick="eliminaPrenotazione(${idx})">Elimina</button>
+                </td>
+            `;
+            body.appendChild(tr);
+        });
+    }
+
+    function avviaModifica(idx) {
+        const p = db[idx];
+        document.getElementById('txtCapogruppo').value = p.capogruppo;
+        document.getElementById('numOspiti').value = p.ospiti;
+        document.getElementById('edit-index').value = idx;
+        
+        document.getElementById('form-title').textContent = "Riassegna / Modifica Gruppo";
+        document.getElementById('btn-invia').textContent = "Salva Modifiche";
+        document.getElementById('btn-annulla').classList.remove('hidden');
+
+        aggiornaListaCheckboxTavoli();
+    }
+
+    function eliminaPrenotazione(idx) {
+        if(confirm("Eliminare questa prenotazione?")) { 
+            db.splice(idx, 1); 
+            resettaForm(); 
+            salvaInMemoria(); 
+            aggiornaListaCheckboxTavoli(); 
+        }
+    }
+
+    function resettaForm() {
+        document.getElementById('formPrenotazione').reset();
+        document.getElementById('edit-index').value = "-1";
+        document.getElementById('form-title').textContent = "2. Gestione Gruppo";
+        document.getElementById('btn-invia').textContent = "Inserisci";
+        document.getElementById('btn-annulla').classList.add('hidden');
+    }
+
+    window.onload = () => {
+        caricaDatiDaMemoria(); 
+        aggiornaListaCheckboxTavoli();
+    };
+</script>
+</body>
+</html>
