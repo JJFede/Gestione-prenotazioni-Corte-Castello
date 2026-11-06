@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Pannello Gestione Tavoli Salone</title>
+    <style>
+        :root {
+            --bg-vuoto: #e2e8f0;
+            --bg-parziale: #fef08a; /* Giallo */
+            --bg-pieno: #fca5a5;    /* Rosso */
+            --text-dark: #1e293b;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: var(--text-dark);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        header {
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+        .grid-config {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        input, select, button {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #2563eb;
+            color: white;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        .btn-secondary {
+            background-color: #64748b;
+        }
+        .btn-secondary:hover {
+            background-color: #475569;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .warning-banner {
+            background-color: #ffedd5;
+            border: 1px solid #f97316;
+            color: #c2410c;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        /* Planimetria */
+        .planimetria-container {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        .layout-info {
+            font-style: italic;
+            margin-bottom: 10px;
+            color: #64748b;
+        }
+        .mappa {
+            display: flex;
+            border: 2px solid #94a3b8;
+            min-width: 1000px;
+            background: #f1f5f9;
+            position: relative;
+        }
+        .zona-intrattenimento {
+            width: 16%; /* 3m su 18m circa */
+            background: #ddd6fe;
+            border-right: 2px dashed #7c3aed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #5b21b6;
+            text-align: center;
+            padding: 10px;
+        }
+        .zona-tavoli-sinistra {
+            width: 34%; /* prima del corridoio */
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 10px;
+            padding: 10px;
+        }
+        .corridoio {
+            width: 11%; /* 2m su 18m circa */
+            background: #fee2e2;
+            border-left: 2px dashed #ef4444;
+            border-right: 2px dashed #ef4444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #991b1b;
+            writing-mode: vertical-rl;
+            text-align: center;
+        }
+        .zona-tavoli-destra {
+            width: 39%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 10px;
+            padding: 10px;
+        }
+        .veranda-container {
+            margin-top: 15px;
+            border: 2px dashed #059669;
+            background: #ecfdf5;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+        }
+        .veranda-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        .tavolo {
+            background: var(--bg-vuoto);
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 8px;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .tavolo:hover {
+            transform: scale(1.02);
+        }
+        .tavolo.selezionato {
+            border: 2px solid #2563eb;
+            box-shadow: 0 0 5px rgba(37,99,235,0.5);
+        }
+        .tavolo.parziale { background: var(--bg-parziale); }
+        .tavolo.pieno { background: var(--bg-pieno); }
+        
+        .tavolo-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .tavolo-gruppi {
+            font-size: 0.75em;
+            margin-top: 4px;
+            max-height: 50px;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+        }
+        .tavolo-gruppi li {
+            background: rgba(255,255,255,0.6);
+            margin-bottom: 2px;
+            padding: 1px 4px;
+            border-radius: 2px;
+        }
+        
+        /* Legenda */
+        .legenda {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        .legenda-item { display: flex; align-items: center; gap: 5px; }
+        .legenda-box { width: 15px; height: 15px; border-radius: 3px; border: 1px solid #cbd5e1;}
+
+        /* Registro */
+        .registro-container {
+            margin-top: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th { background-color: #f1f5f9; }
+        .btn-danger {
+            background-color: #ef4444;
+            padding: 4px 8px;
+            font-size: 0.85em;
+            margin: 0;
+            width: auto;
+        }
+        .btn-danger:hover { background-color: #dc2626; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Pannello Gestione Tavoli Salone</h1>
+    </header>
+
+    <div class="grid-config">
+        <!-- 1. Spazio e Comfort -->
+        <div class="card">
+            <h3>1. Spazio e Comfort</h3>
+            <div class="form-group">
+                <button type="button" id="btn-veranda" class="btn-secondary" onclick="toggleVeranda()">Attiva Area Veranda (+4 Tavoli)</button>
+            </div>
+            <div class="form-group">
+                <label for="capienza-globale">Capienza massima tavolo:</label>
+                <select id="capienza-globale" onchange="cambiaCapienza()">
+                    <option value="8" selected>8 Persone (Sedute Strette)</option>
+                    <option value="6">6 Persone (Sedute Larghe)</option>
+                </select>
+            </div>
+            <div id="banner-riassegnazione" class="warning-banner">
+                Tavoli da riassegnare ⚠️ L'elenco dei gruppi è preservato, ma i tavoli sono stati resettati a causa del cambio capienza. Riassegna i gruppi sotto.
+            </div>
+        </div>
+
+        <!-- 2. Gestione Gruppo -->
+        <div class="card">
+            <h3>2. Gestione Gruppo</h3>
+            <div class="form-group">
+                <label for="compagnia-nome">Capogruppo / Compagnia:</label>
+                <input type="text" id="compagnia-nome" placeholder="Es. Rossi">
+            </div>
+            <div class="form-group">
+                <label for="compagnia-persone">Numero Persone:</label>
+                <input type="number" id="compagnia-persone" min="1" value="4">
+            </div>
+            <p style="font-size:0.85em; color:#64748b; margin: 5px 0;">
+                Seleziona uno o più tavoli direttamente dal layout grafico (la coabitazione è attiva).
+            </p>
+            <div style="display:flex; gap:10px;">
+                <button onclick="inserisciPrenotazione()">Inserisci</button>
+                <button class="btn-secondary" onclick="annullaSelezione()">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stato Riempimento -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="stats">
+            <div>Posti Totali Occupati: <span id="stat-occupati">0</span></div>
+            <div>Stato Tavoli Liberi: <span id="stat-liberi">20/20</span></div>
+        </div>
+    </div>
+
+    <!-- 3. Layout Planimetrico -->
+    <div class="planimetria-container">
+        <h3>3. Layout Planimetrico Omogeneo (18m x 7m)</h3>
+        <div class="layout-info">Zona intrattenimento a sinistra, 8 tavoli prima del corridoio di evacuazione (2m), 12 tavoli a destra.</div>
+        
+        <div class="mappa" id="mappa-principale">
+            <!-- Zona Intrattenimento -->
+            <div class="zona-intrattenimento">
+                ZONA<br>INTRATTENIMENTO<br>(3m x 7m)
+            </div>
+            
+            <!-- Zona Sinistra (8 tavoli: 4 file da 2) -->
+            <div class="zona-tavoli-sinistra" id="grid-sinistra"></div>
+            
+            <!-- Corridoio -->
+            <div class="corridoio">
+                🚶 CORRIDOIO DI SICUREZZA (Passaggio Libero 2m) 🚶
+            </div>
+            
+            <!-- Zona Destra (12 tavoli: 4 file da 3) -->
+            <div class="zona-tavoli-destra" id="grid-destra"></div>
+        </div>
+
+        <!-- Veranda Integrata sul Fondo -->
+        <div class="veranda-container" id="veranda-blocco">
+            <h4 style="margin: 0 0 10px 0; color: #047857;">Area Veranda Integrata</h4>
+            <div class="veranda-grid" id="grid-veranda"></div>
+        </div>
+
+        <div class="legenda">
+            <div class="legenda-item"><div class="legenda-box" style="background:var(--bg-vuoto)"></div> Vuoto</div>
+            <div class="legenda-item"><div class="legenda-box" style="background:var(--bg-parziale)"></div> Parzialmente Occupato (Condivisibile)</div>
+            <div class="legenda-item"><div class="legenda-box" style="background:var(--bg-pieno)"></div> Completamente Pieno</div>
+        </div>
+    </div>
+
+    <!-- 4. Registro Prenotazioni -->
+    <div class="registro-container">
+        <h3>4. Registro Prenotazioni Attive</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Capogruppo</th>
+                    <th>Ospiti</th>
+                    <th>Tavoli Assegnati</th>
+                    <th>Azioni</th>
+                </tr>
+            </thead>
+            <tbody id="registro-body">
+                <!-- Dinamico -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // Configurazione e Stato Globale
+    let capienzaMassima = 8;
+    let verandaAttiva = false;
+    let tavoliSelezionati = [];
+    
+    // Struttura dati persistente
+    let stato = {
+        prenotazioni: [], // { id, capogruppo, persone, tavoli: [] }
+        verandaAttiva: false,
+        capienzaMassima: 8
+    };
+
+    // Inizializzazione dei tavoli fisici
+    const totaliTavoliFissi = 20;
+    const totaliTavoliVeranda = 4;
+
+    function salvaSuLocalStorage() {
+        localStorage.setItem('gestione_tavoli_stato', JSON.stringify(stato));
+    }
+
+    function caricaDaLocalStorage() {
+        const salvato = localStorage.getItem('gestione_tavoli_stato');
+        if (salvato) {
+            try {
+                stato = JSON.parse(salvato);
+                capienzaMassima = stato.capienzaMassima || 8;
+                verandaAttiva = stato.verandaAttiva || false;
+                document.getElementById('capienza-globale').value = capienzaMassima;
+                aggiornaInterfacciaVeranda();
+            } catch (e) {
+                console.error("Errore caricamento localStorage, reset...", e);
+            }
+        }
+    }
+
+    function generaMappaGrafica() {
+        const gridSinistra = document.getElementById('grid-sinistra');
+        const gridDestra = document.getElementById('grid-destra');
+        const gridVeranda = document.getElementById('grid-veranda');
+
+        gridSinistra.innerHTML = '';
+        gridDestra.innerHTML = '';
+        gridVeranda.innerHTML = '';
+
+        // Genera tavoli 1-8 (Sinistra)
+        for (let i = 1; i <= 8; i++) {
+            gridSinistra.appendChild(creaElementoTavolo('T' + i));
+        }
+        // Genera tavoli 9-20 (Destra)
+        for (let i = 9; i <= 20; i++) {
+            gridDestra.appendChild(creaElementoTavolo('T' + i));
+        }
+        // Genera tavoli veranda V1-V4
+        for (let i = 1; i <= 4; i++) {
+            gridVeranda.appendChild(creaElementoTavolo('V' + i));
+        }
+
+        renderizzaDatiStato();
+    }
+
+    function creaElementoTavolo(codice) {
+        const div = document.createElement('div');
+        div.className = 'tavolo';
+        div.id = 'tavolo-' + codice;
+        div.setAttribute('data-codice', codice);
+        div.onclick = () => selezionandoTavolo(codice);
+
+        div.innerHTML = `
+            <div class="tavolo-header">
+                <span>${codice}</span>
+                <span class="tavolo-counter" id="count-${codice}">0/${capienzaMassima}</span>
+            </div>
+            <ul class="tavolo-gruppi" id="gruppi-${codice}"></ul>
+        `;
+        return div;
+    }
+
+    function selezionandoTavolo(codice) {
+        // Verifica se il tavolo ha spazio o se lo stiamo deselezionando
+        const index = tavoliSelezionati.indexOf(codice);
+        const el = document.getElementById('tavolo-' + codice);
+        
+        if (index > -1) {
+            tavoliSelezionati.splice(index, 1);
+            el.classList.remove('selezionato');
+        } else {
+            // Controlla se è già pieno prima di selezionarlo
+            const occupati = calcolaOccupazioneTavolo(codice);
+            if (occupati >= capienzaMassima) {
+                alert("Il tavolo " + codice + " è già completamente pieno!");
+                return;
+            }
+            tavoliSelezionati.push(codice);
+            el.classList.add('selezionato');
+        }
+    }
+
+    function calcolaOccupazioneTavolo(codice) {
+        let occ = 0;
+        stato.prenotazioni.forEach(p => {
+            if (p.tavoli.includes(codice)) {
+                occ += p.persone;
+            }
+        });
+        return occ;
+    }
+
+    function renderizzaDatiStato() {
+        // Reset grafiche tavoli
+        const tuttiCodici = [];
+        for(let i=1; i<=20; i++) tuttiCodici.push('T'+i);
+        for(let i=1; i<=4; i++) tuttiCodici.push('V'+i);
+
+        let totaleSeduti = 0;
+        let tavoliLiberiConteggio = 0;
+        let mappaTavoliGruppi = {};
+        let mappaTavoliOccupazione = {};
+
+        tuttiCodici.forEach(c => {
+            mappaTavoliGruppi[c] = [];
+            mappaTavoliOccupazione[c] = 0;
+        });
+
+        // Mappa le prenotazioni sui tavoli
+        let haTavoliDaRiassegnare = false;
+        stato.prenotazioni.forEach(p => {
+            totaleSeduti += p.persone;
+            if (p.tavoli.length === 0) {
+                haTavoliDaRiassegnare = true;
+            }
+            p.tavoli.forEach(t => {
+                if (mappaTavoliOccupazione[t] !== undefined) {
+                    mappaTavoliOccupazione[t] += p.persone;
+                    mappaTavoliGruppi[t].push(`${p.capogruppo} (${p.persone})`);
+                }
+            });
+        });
+
+        // Mostra/Nascondi banner avviso arancione
+        document.getElementById('banner-riassegnazione').style.display = haTavoliDaRiassegnare ? 'block' : 'none';
+
+        // Aggiorna ogni elemento tavolo grafico
+        tuttiCodici.forEach(c => {
+            const elTavolo = document.getElementById('tavolo-' + c);
+            if (!elTavolo) return;
+
+            const occ = mappaTavoliOccupazione[c];
+            const gruppiList = mappaTavoliGruppi[c];
+            
+            // Aggiorna contatore testo
+            const counterEl = document.getElementById('count-' + c);
+            if (counterEl) counterEl.innerText = `${occ}/${capienzaMassima}`;
+
+            // Aggiorna lista gruppi
+            const ulEl = document.getElementById('gruppi-' + c);
+            if (ulEl) {
+                ulEl.innerHTML = gruppiList.map(g => `<li>${g}</li>`).join('');
+            }
+
+            // Colori di stato
+            elTavolo.classList.remove('parziale', 'pieno');
+            if (occ === 0) {
+                // Rimane vuoto standard
+                if (c.startsWith('T') || (c.startsWith('V') && verandaAttiva)) {
+                    tavoliLiberiConteggio++;
+                }
+            } else if (occ >= capienzaMassima) {
+                elTavolo.classList.add('pieno');
+            } else {
+                elTavolo.classList.add('parziale');
+            }
+        });
+
+        // Aggiorna Statistiche Globali
+        document.getElementById('stat-occupati').innerText = totaleSeduti;
+        const denominatore = 20 + (verandaAttiva ? 4 : 0);
+        document.getElementById('stat-liberi').innerText = `${tavoliLiberiConteggio}/${denominatore}`;
+
+        // Renderizza Tabella Registro
+        const tbody = document.getElementById('registro-body');
+        tbody.innerHTML = '';
+        
+        stato.prenotazioni.forEach(p => {
+            const tr = document.createElement('tr');
+            const infoTavoli = p.tavoli.length > 0 
+                ? p.tavoli.join(', ') 
+                : `<span style="color:#e67e22; font-weight:bold;">Tavoli da riassegnare ⚠️</span>`;
+
+            tr.innerHTML = `
+                <td><strong>${p.capogruppo}</strong></td>
+                <td>${p.persone}</td>
+                <td>${infoTavoli}</td>
+                <td>
+                    ${p.tavoli.length === 0 ? `<button class="btn-secondary" style="width:auto; padding:4px 8px; font-size:0.85em; margin-right:5px;" onclick="avviaRiassegnazioneGuidata('${p.id}')">Riassegna</button>` : ''}
+                    <button class="btn-danger" onclick="eliminaPrenotazione('${p.id}')">Elimina</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function inserisciPrenotazione() {
+        const nome = document.getElementById('compagnia-nome').value.trim();
+        const persone = parseInt(document.getElementById('compagnia-persone').value);
+
+        if (!nome) {
+            alert("Inserire il nome del capogruppo o della compagnia.");
+            return;
+        }
+        if (isNaN(persone) || persone <= 0) {
+            alert("Inserire un numero valido di persone.");
+            return;
+        }
+        if (tavoliSelezionati.length === 0) {
+            alert("Seleziona almeno un tavolo sulla mappa per questa prenotazione.");
+            return;
+        }
+
+        // Verifica simulata di sforamento capienza sui tavoli scelti
+        for (let t of tavoliSelezionati) {
+            const attuale = calcolaOccupazioneTavolo(t);
+            if (attuale + persone > capienzaMassima) {
+                alert(`Il tavolo ${t} supererebbe la capienza massima consentita (${capienzaMassima} posti).`);
+                return;
+            }
+        }
+
+        // Aggiungi prenotazione
+        stato.prenotazioni.push({
+            id: 'p_' + Date.now(),
+            capogruppo: nome,
+            persone: persone,
+            tavoli: [...tavoliSelezionati]
+        });
+
+        // Reset form e selezione temporanea
+        document.getElementById('compagnia-nome').value = '';
+        annullaSelezione();
+        
+        salvaSuLocalStorage();
+        renderizzaDatiStato();
+    }
+
+    function avviaRiassegnazioneGuidata(id) {
+        const p = stato.prenotazioni.find(x => x.id === id);
+        if (!p) return;
+        
+        document.getElementById('compagnia-nome').value = p.capogruppo;
+        document.getElementById('compagnia-persone').value = p.persone;
+        
+        // Rimuoviamo la vecchia istanza in sospeso per reinserirla con i nuovi tavoli prescelti
+        stato.prenotazioni = stato.prenotazioni.filter(x => x.id !== id);
+        
+        alert(`Modalità riallocazione: Seleziona i nuovi tavoli per la comitiva "${p.capogruppo}" di ${p.persone} persone e premi 'Inserisci'.`);
+        salvaSuLocalStorage();
+        renderizzaDatiStato();
+    }
+
+    function eliminaPrenotazione(id) {
+        if(confirm("Sei sicuro di voler eliminare questa prenotazione?")) {
+            stato.prenotazioni = stato.prenotazioni.filter(p => p.id !== id);
+            salvaSuLocalStorage();
+            renderizzaDatiStato();
+        }
+    }
+
+    function annullaSelezione() {
+        tavoliSelezionati.forEach(c => {
+            const el = document.getElementById('tavolo-' + c);
+            if(el) el.classList.remove('selezionato');
+        });
+        tavoliSelezionati = [];
+    }
+
+    function toggleVeranda() {
+        verandaAttiva = !verandaAttiva;
+        stato.verandaAttiva = verandaAttiva;
+        aggiornaInterfacciaVeranda();
+        salvaSuLocalStorage();
+        renderizzaDatiStato();
+    }
+
+    function aggiornaInterfacciaVeranda() {
+        const blocco = document.getElementById('veranda-blocco');
+        const btn = document.getElementById('btn-veranda');
+        if (verandaAttiva) {
+            blocco.style.display = 'block';
+            btn.innerText = 'Disattiva Area Veranda';
+            btn.style.backgroundColor = '#059669';
+        } else {
+            blocco.style.display = 'none';
+            btn.innerText = 'Attiva Area Veranda (+4 Tavoli)';
+            btn.style.backgroundColor = '#64748b';
+            
+            // Se c'erano prenotazioni associate alla veranda disattivata, rimuoviamo solo l'assegnazione tavoli
+            stato.prenotazioni.forEach(p => {
+                p.tavoli = p.tavoli.filter(t => !t.startsWith('V'));
+            });
+        }
+    }
+
+    function cambiaCapienza() {
+        const nuovaCapienza = parseInt(document.getElementById('capienza-globale').value);
+        if (nuovaCapienza !== capienzaMassima) {
+            capienzaMassima = nuovaCapienza;
+            stato.capienzaMassima = capienzaMassima;
+            
+            // Disaccoppiamento: preserva i gruppi ma rimuove i vecchi tavoli assegnati
+            stato.prenotazioni.forEach(p => {
+                p.tavoli = [];
+            });
+            
+            annullaSelezione();
+            salvaSuLocalStorage();
+            generaMappaGrafica();
+        }
+    }
+
+    // Avvio dell'applicazione
+    window.onload = function() {
+        caricaDaLocalStorage();
+        generaMappaGrafica();
+    };
+</script>
+
+</body>
+</html>
