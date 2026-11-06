@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Prenotazioni e Tavoli</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #18bc9c;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text: #333333;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 992px) {
+            .container { grid-template-columns: 1fr; }
+        }
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            height: fit-content;
+        }
+        h1, h2, h3 { color: var(--primary); margin-top: 0; }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #cccccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        button:hover { opacity: 0.9; }
+        .btn-print {
+            background-color: #3498db;
+        }
+        .lista-ospiti {
+            margin-top: 15px;
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .ospite-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #f1f1f1;
+        }
+        .delete-btn {
+            color: #e74c3c;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .stats-box {
+            background: #eef2f7;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .stats-box div {
+            margin-bottom: 5px;
+        }
+        .warning {
+            background: #f39c12;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            display: none;
+        }
+        
+        /* Layout Mappa Salone */
+        .mappa-wrapper {
+            margin-top: 20px;
+        }
+        .salone-grid {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            background: #ffffff;
+            border: 3px solid #2c3e50;
+            border-radius: 4px;
+            box-sizing: border-box;
+            display: flex;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .zona-intrattenimento {
+            width: 16.66%;
+            height: 100%;
+            background: #ffeaa7;
+            border-right: 2px dashed #ff7675;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-weight: bold;
+            color: #d63031;
+            font-size: 0.9em;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+        .zona-tavoli {
+            width: 83.33%;
+            height: 100%;
+            position: relative;
+            background: #fafafa;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 12px;
+        }
+        .tavolo-visual {
+            width: 88px;
+            height: 31px;
+            background: #18bc9c;
+            color: white;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75em;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        .tavolo-visual.capotavola::before,
+        .tavolo-visual.capotavola::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 15px;
+            background: #f39c12;
+            top: 8px;
+            border-radius: 2px;
+        }
+        .tavolo-visual.capotavola::before { left: -8px; }
+        .tavolo-visual.capotavola::after { right: -8px; }
+        
+        .tavoli-elenco {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+        .tavolo-card {
+            background: #f1f4f6;
+            border-left: 5px solid var(--accent);
+            padding: 12px;
+            border-radius: 4px;
+        }
+        .tavolo-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+            margin-bottom: 8px;
+        }
+        .badge {
+            background: var(--primary);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.8em;
+        }
+        .badge-extra {
+            background: #f39c12;
+        }
+        
+        .print-header {
+            display: none;
+        }
+
+        @media print {
+            body {
+                background: white;
+                color: black;
+                padding: 0;
+            }
+            .container {
+                display: block;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-header {
+                display: block;
+                text-align: center;
+                margin-bottom: 25px;
+                border-bottom: 2px solid #333;
+                padding-bottom: 10px;
+            }
+            .card {
+                box-shadow: none;
+                padding: 0;
+                margin-bottom: 30px;
+            }
+            .salone-grid {
+                width: 100% !important;
+                height: 220px !important;
+                border: 2px solid #000;
+                page-break-inside: avoid;
+            }
+            .tavolo-visual {
+                border: 1px solid #000;
+                background: #e6e6e6 !important;
+                color: #000 !important;
+            }
+            .tavolo-card {
+                border: 1px solid #ccc;
+                background: #fff;
+                page-break-inside: avoid;
+            }
+            .badge {
+                border: 1px solid #000;
+                background: #fff !important;
+                color: #000 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="print-header">
+    <h2>🍽️ REPORT PRENOTAZIONI E DISPOSIZIONE SALE</h2>
+    <p id="printMeta">Configurazione</p>
+</div>
+
+<div style="text-align: center; margin-bottom: 20px;" class="no-print">
+    <h1>🍽️ Real-Time Layout & Seating Planner</h1>
+    <p>Pannello di controllo spaziale del salone (18m x 7m) con calcolo capotavola e report PDF.</p>
+</div>
+
+<div class="container">
+    <div class="card no-print">
+        <h2>1. Configurazione Sala</h2>
+        <div class="form-group">
+            <label for="zonaScelta">Configurazione Spazio:</label>
+            <select id="zonaScelta" onchange="calcolaTavoli()">
+                <option value="salone">Solo Salone (Max 20 tavoli)</option>
+                <option value="veranda">Salone + Veranda (Max 24 tavoli)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="comfort">Tipo di Festa / Comfort:</label>
+            <select id="comfort" onchange="calcolaTavoli()">
+                <option value="6">Sedute Larghe (6 anziani/formale)</option>
+                <option value="8">Sedute Strette (8 giovani/informale)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 5px; font-weight: normal; cursor:pointer;">
+                <input type="checkbox" id="usaCapotavola" checked onchange="calcolaTavoli()">
+                Attiva +2 capotavola per tavoli singoli
+            </label>
+        </div>
+        <div class="stats-box">
+            <h3>Disponibilità Posti Residui</h3>
+            <div>Posti Rimanenti (Larghe): <strong id="postiLarghe">0</strong></div>
+            <div>Posti Rimanenti (Strette): <strong id="postiStrette">0</strong></div>
+            <div>Tavoli Utilizzati: <strong id="tavoliUsati">0</strong></div>
+        </div>
+        <button class="btn-print" onclick="window.print()">Stampa / Salva in PDF</button>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+        <h3>Aggiungi Prenotazione</h3>
+        <form id="formPrenotazione" onsubmit="aggiungiGruppo(event)">
+            <div class="form-group">
+                <label for="nomeGruppo">Compagnia / Capogruppo:</label>
+                <input type="text" id="nomeGruppo" required placeholder="Es. Fiammenghi">
+            </div>
+            <div class="form-group">
+                <label for="numeroPersone">Ospiti:</label>
+                <input type="number" id="numeroPersone" required min="1" placeholder="Es. 10">
+            </div>
+            <button type="submit">Inserisci</button>
+        </form>
+        <h3>Ospiti Inseriti (<span id="TotPersone">0</span> totali)</h3>
+        <div class="lista-ospiti" id="listaOspiti"></div>
+    </div>
+
+    <div class="card" style="width: 100%;">
+        <h2>Mappa Layout Salone (18m × 7m)</h2>
+        <p style="font-size: 0.85em; color: #666; margin-top: -8px;">Ogni rettangolo rappresenta un tavolo da 2.2m × 0.77m. La sezione gialla a sinistra indica la zona intrattenimento (3m × 7m).</p>
+        <div class="salone-grid">
+            <div class="zona-intrattenimento">
+                <div>🎭<br>ZONA<br>INTRATTENIMENTO<br>(3m × 7m)</div>
+            </div>
+            <div class="zona-tavoli" id="mappaTavoliVisual"></div>
+        </div>
+        <div id="allarmeTavoli" class="warning"></div>
+        <h2>Elenco Dettagliato Tavoli</h2>
+        <div class="tavoli-elenco" id="outputTavoli"></div>
+    </div>
+</div>
+
+<script>
+    let prenotazioni = {
+        "Nora": 3,
+        "Gabriella": 1,
+        "Sabrina Romanelli": 2,
+        "Genevini Dario": 4,
+        "Facchi Mariarosa": 5,
+        "Gandolfini Assunta": 1,
+        "Galuppini Giuseppe": 3,
+        "Fiammenghi Giuseppe": 10,
+        "Broglia Laura": 6,
+        "Mutti Guido": 2,
+        "Band Montichiari": 5,
+        "Mutti Michela": 4
+    };
+
+    function aggiornaListaInterfaccia() {
+        const lista = document.getElementById('listaOspiti');
+        lista.innerHTML = '';
+        let totale = 0;
+        for (let [nome, qta] of Object.entries(prenotazioni)) {
+            totale += qta;
+            lista.innerHTML += `
+                <div class="ospite-item">
+                    <span><strong>${nome}</strong> (${qta})</span>
+                    <span class="delete-btn no-print" onclick="eliminaGruppo('${nome}')">❌</span>
+                </div>
+            `;
+        }
+        document.getElementById('TotPersone').innerText = totale;
+    }
+
+    function aggiungiGruppo(e) {
+        e.preventDefault();
+        const nome = document.getElementById('nomeGruppo').value.trim();
+        const qta = parseInt(document.getElementById('numeroPersone').value);
+        if(nome && qta > 0) {
+            prenotazioni[nome] = (prenotazioni[nome] || 0) + qta;
+            document.getElementById('formPrenotazione').reset();
+            aggiornaListaInterfaccia();
+            calcolaTavoli();
+        }
+    }
+
+    function eliminaGruppo(nome) {
+        delete prenotazioni[nome];
+        aggiornaListaInterfaccia();
+        calcolaTavoli();
+    }
+
+    function calcolaTavoli() {
+        const configSpazio = document.getElementById('zonaScelta').value;
+        const capienzaBase = parseInt(document.getElementById('comfort').value);
+        const usaCapotavola = document.getElementById('usaCapotavola').checked;
+        const maxTavoliFisici = configSpazio === 'salone' ? 20 : 24;
+        let gruppiOrdinati = Object.entries(prenotazioni).sort((a, b) => b[1] - a[1]);
+        let layoutTavoli = [];
+
+        gruppiOrdinati.forEach(([nome, persone]) => {
+            let pRimanenti = persone;
+            while (pRimanenti > 0) {
+                let inserito = false;
+                for (let tavolo of layoutTavoli) {
+                    let capienzaAttuale = capienzaBase;
+                    if (usaCapotavola && Object.keys(tavolo.gruppi).length === 1 && tavolo.totale > capienzaBase) {
+                        capienzaAttuale = capienzaBase + 2;
+                    }
+                    let spazioLibero = capienzaAttuale - tavolo.totale;
+                    if (Object.keys(tavolo.gruppi).length === 1 && usaCapotavola && tavolo.totale > capienzaBase) {
+                        continue; 
+                    }
+                    if (spazioLibero >= pRimanenti) {
+                        tavolo.gruppi[nome] = (tavolo.gruppi[nome] || 0) + pRimanenti;
+                        tavolo.totale += pRimanenti;
+                        pRimanenti = 0;
+                        inserito = true;
+                        break;
+                    }
+                }
+                if (!inserito) {
+                    let limiteIniziale = capienzaBase;
+                    if (usaCapotavola && pRimanenti > capienzaBase) {
+                        limiteIniziale = capienzaBase + 2;
+                    }
+                    let daInserire = Math.min(pRimanenti, limiteIniziale);
+                    let nuovoTavolo = { gruppi: {}, totale: daInserire, haCapotavola: (daInserire > capienzaBase) };
+                    nuovoTavolo.gruppi[nome] = daInserire;
+                    layoutTavoli.push(nuovoTavolo);
+                    pRimanenti -= daInserire;
+                }
+            }
+        });
+
+        let totalePersoneSedute = Object.values(prenotazioni).reduce((a,b) => a+b, 0);
+        let maxPostiLarghe = maxTavoliFisici * 6;
+        let maxPostiStrette = maxTavoliFisici * 8;
+        let residuiLarghe = Math.max(0, maxPostiLarghe - totalePersoneSedute);
+        let residuiStrette = Math.max(0, maxPostiStrette - totalePersoneSedute);
+
+        document.getElementById('postiLarghe').innerText = residuiLarghe;
+        document.getElementById('postiStrette').innerText = residuiStrette;
+        document.getElementById('tavoliUsati').innerText = layoutTavoli.length;
+
+        const allarme = document.getElementById('allarmeTavoli');
+        if (layoutTavoli.length > maxTavoliFisici) {
+            allarme.style.display = 'block';
+            allarme.innerText = `⚠️ Sforamento Capienza: Servono ${layoutTavoli.length} tavoli, ma la configurazione permette al massimo ${maxTavoliFisici}!`;
+        } else {
+            allarme.style.display = 'none';
+        }
+
+        document.getElementById('printMeta').innerText = `Spazio: ${configSpazio.toUpperCase()} | Modalità base: ${capienzaBase} posti | Ospiti: ${totalePersoneSedute}`;
+
+        const mappaVisual = document.getElementById('mappaTavoliVisual');
+        mappaVisual.innerHTML = '';
+        layoutTavoli.forEach((t, idx) => {
+            let classi = 'tavolo-visual';
+            if (t.haCapotavola) classi += ' capotavola';
+            mappaVisual.innerHTML += `<div class="${classi}">T${idx+1}<br><span style="font-size:0.8em;">(${t.totale}p)</span></div>`;
+        });
+
+        const output = document.getElementById('outputTavoli');
+        output.innerHTML = '';
+        layoutTavoli.forEach((tavolo, index) => {
+            let dettagliGruppi = '';
+            for (let [gruppo, qta] of Object.entries(tavolo.gruppi)) {
+                dettagliGruppi += `<li>${gruppo}: <strong>${qta} p.</strong></li>`;
+            }
+            let extraBadge = tavolo.haCapotavola ? `<span class="badge badge-extra">+2 Capotavola</span>` : '';
+            output.innerHTML += `
+                <div class="tavolo-card">
+                    <div class="tavolo-header">
+                        <span>TAVOLO ${index + 1} ${extraBadge}</span>
+                        <span class="badge">${tavolo.totale} Posti</span>
+                    </div>
+                    <ul style="margin: 0; padding-left: 15px;">${dettagliGruppi}</ul>
+                </div>
+            `;
+        });
+    }
+
+    aggiornaListaInterfaccia();
+    calcolaTavoli();
+</script>
+</body>
+</html>
