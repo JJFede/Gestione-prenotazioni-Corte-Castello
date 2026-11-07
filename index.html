@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pannello Gestione Tavoli Salone</title>
+    <!-- Tailwind CSS per la grafica pulita e moderna -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- html2pdf.js per l'esportazione asincrona del PDF senza blocchi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 120px 1fr 60px 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 1024px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        .table-cell {
+            transition: all 0.2s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans p-4 min-h-screen">
+
+    <div class="max-w-7xl mx-auto bg-white shadow-lg rounded-xl p-6">
+        
+        <!-- Header / Titolo principale -->
+        <div class="border-b border-gray-200 pb-4 mb-6 flex flex-wrap justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    🪑 Pannello Gestione Tavoli Salone
+                </h1>
+                <p class="text-sm text-gray-500 mt-1">Configurazione geometrica asimmetrica (18m x 7m) • Controllo Overbooking & Persistenza</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="generaPDFCompleto()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+                    📄 Genera PDF Completo
+                </button>
+                <button onclick="azzerareTutteLePrenotazioni()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition flex items-center gap-2 cursor-pointer">
+                    ⚠ Azzerare Tutte le Prenotazioni
+                </button>
+            </div>
+        </div>
+
+        <!-- Avviso di generazione PDF (Nativo / Asincrono nascosto di default) -->
+        <div id="status-generazione" class="hidden mb-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 font-medium rounded-r-lg animate-pulse">
+            Generazione del PDF in corso... Attendere.
+        </div>
+
+        <!-- Sezione Controlli Principali e Form -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            
+            <!-- 1. Spazio e Sincronizzazione -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h2 class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2 border-b pb-2">
+                    🔄 Sincronizzazione & Spazio
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">ID Stanza Broadcast</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="stanza-id" value="SalonePrincipale1" class="w-full bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-blue-500" readonly>
+                            <button class="bg-gray-200 text-gray-700 px-3 py-1.5 text-xs font-semibold rounded-md opacity-50 cursor-not-allowed" disabled>Connetti</button>
+                        </div>
+                        <div class="flex items-center gap-1.5 mt-2 text-xs text-green-600 font-medium">
+                            <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+                            Connesso (BroadcastChannel locale attivo)
+                        </div>
+                    </div>
+                    
+                    <div class="pt-2 border-t border-gray-200">
+                        <label class="flex items-center gap-2 cursor-pointer font-medium text-sm text-gray-700">
+                            <input type="checkbox" id="check-veranda" onchange="toggleVeranda()" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                            Attiva Area Veranda (+4 Tavoli)
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold uppercase text-gray-500 mb-2">Capienza massima tavolo:</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                <input type="radio" name="capienza-max" value="6" checked onchange="cambiaCapienza(6)" class="w-4 h-4 text-blue-600">
+                                <span>6 Posti (Sedute Larghe)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer text-sm">
+                                <input type="radio" name="capienza-max" value="8" onchange="cambiaCapienza(8)" class="w-4 h-4 text-blue-600">
+                                <span>8 Posti (Sedute Strette)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Nuova Prenotazione / Modifica Gruppo -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 md:col-span-2">
+                <h2 id="titolo-form" class="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2 border-b pb-2">
+                    👤 Nuova Prenotazione
+                </h2>
+                
+                <div id="alert-reset-capienza" class="hidden mb-3 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+                    ⚠ Alcune prenotazioni sono state rese da riassegnare perché superavano la nuova capienza dei tavoli. Riassegna i gruppi sotto.
+                </div>
+
+                <form id="form-prenotazione" onsubmit="salvaPrenotazione(event)" class="space-y-4">
+                    <input type="hidden" id="edit-id" value="">
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Capogruppo / Compagnia</label>
+                            <input type="text" id="capogruppo" required placeholder="Nome cliente..." class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Numero Persone</label>
+                            <input type="number" id="num-persone" min="1" required value="4" oninput="aggiornaValidazionePosti()" class="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="block text-xs font-semibold uppercase text-gray-500 mb-1">Tavoli Selezionati sulla Mappa:</span>
+                        <div id="tavoli-selezionati-lista" class="text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-2 rounded-lg inline-block">
+                            Nessuno
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">Seleziona uno o più tavoli direttamente dal layout grafico (la coabitazione è attiva).</p>
+                    </div>
+
+                    <!-- Notifica Dinamica Validità Capienza Posti -->
+                    <div id="validazione-posti-box" class="hidden p-2.5 rounded-lg font-medium text-xs"></div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-5 rounded-lg text-sm transition cursor-pointer">
+                            Inserisci Prenotazione
+                        </button>
+                        <button type="button" onclick="annullaModifica()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 font-semibold py-2 px-4 rounded-lg text-sm transition cursor-pointer">
+                            Annulla
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Indicatori Statistici di Sintesi -->
+        <div class="flex gap-6 mb-4 text-sm font-bold border-b border-gray-200 pb-3">
+            <div class="text-gray-700">Posti Totali Occupati: <span id="stat-posti-occupati" class="text-blue-600">0</span></div>
+            <div class="text-gray-700">Stato Tavoli Liberi: <span id="stat-tavoli-liberi" class="text-green-600">20/20</span></div>
+        </div>
+
+        <!-- 3. Layout Planimetrico Omogeneo (18m x 7m) -->
+        <div class="mb-8">
+            <h2 class="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                📐 3. Layout Planimetrico Omogeneo (18m x 7m)
+            </h2>
+            
+            <!-- Legenda Stati Tavoli -->
+            <div class="flex flex-wrap gap-4 text-xs font-semibold mb-4 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-white border border-gray-300 inline-block"></span> Vuoto</div>
+                <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-blue-500 inline-block"></span> Selezionato</div>
+                <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-yellow-400 inline-block"></span> Parziale (Condivisibile)</div>
+                <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 rounded bg-red-500 inline-block"></span> Pieno</div>
+            </div>
+
+            <!-- Griglia Mappa Interattiva -->
+            <div id="mappa-container" class="bg-gray-900 p-6 rounded-xl border border-gray-800 shadow-inner text-white overflow-x-auto">
+                <div class="min-w-[900px] space-y-4">
+                    
+                    <!-- Blocco Superiore: Intrattenimento + Blocco 4x2 + Corridoio + Blocco 4x3 -->
+                    <div class="flex gap-4 items-stretch min-h-[320px]">
+                        
+                        <!-- Area Intrattenimento (3m x 7m) -->
+                        <div class="w-[140px] bg-purple-900/60 border-2 border-dashed border-purple-500 rounded-xl flex flex-col justify-center items-center text-center p-3 shrink-0">
+                            <span class="text-2xl mb-1">🎭</span>
+                            <span class="font-bold text-xs uppercase tracking-wider text-purple-300">Zona<br>Intrattenimento</span>
+                            <span class="text-[10px] text-purple-400 mt-1">3m x 7m</span>
+                        </div>
+
+                        <!-- Blocco Sinistro: 4 file x 2 colonne (Tavoli 1-8) -->
+                        <div class="grid grid-cols-2 grid-rows-4 gap-3 grow max-w-[280px]" id="blocco-sinistro">
+                            <!-- Popolato via JS -->
+                        </div>
+
+                        <!-- Corridoio di Sicurezza Verticale (2m) -->
+                        <div class="w-[70px] bg-gray-800/80 border border-gray-700 rounded-lg flex flex-col justify-between items-center py-6 shrink-0 text-center text-gray-400 font-bold select-none">
+                            <span class="text-xs tracking-widest uppercase [writing-mode:vertical-lr] rotate-180">🚶 CORRIDOIO</span>
+                            <span class="text-sm my-2">⬇</span>
+                            <span class="text-[10px] text-gray-500">SICUREZZA<br>(2m)</span>
+                            <span class="text-sm my-2">⬇</span>
+                            <span class="text-xs tracking-widest uppercase [writing-mode:vertical-lr] rotate-180">🚶 DI SICUREZZA</span>
+                        </div>
+
+                        <!-- Blocco Destro: 4 file x 3 colonne (Tavoli 9-20) -->
+                        <div class="grid grid-cols-3 grid-rows-4 gap-3 grow" id="blocco-destro">
+                            <!-- Popolato via JS -->
+                        </div>
+
+                    </div>
+
+                    <!-- Area Veranda Esterna Integrata (Fila Unica: Tavoli 21-24) -->
+                    <div id="wrapper-veranda" class="hidden border-t-2 border-dashed border-green-600/40 pt-4">
+                        <div class="bg-emerald-950/40 border border-emerald-800 rounded-xl p-4 flex items-center gap-4">
+                            <div class="w-[140px] shrink-0 text-center">
+                                <span class="text-lg block">🌿</span>
+                                <span class="font-bold text-xs uppercase text-emerald-400 tracking-wide">Area Veranda Esterna</span>
+                                <span class="text-[10px] text-emerald-600 block">(Fila Unica)</span>
+                            </div>
+                            <div class="grid grid-cols-4 gap-4 grow" id="blocco-veranda">
+                                <!-- Popolato via JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Registro Prenotazioni Attive -->
+        <div>
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    📋 4. Registro Prenotazioni Attive
+                </h2>
+                <div class="flex items-center gap-2">
+                    <label for="ordinamento-registro" class="text-xs font-semibold uppercase text-gray-500">Ordina per:</label>
+                    <select id="ordinamento-registro" onchange="cambiaOrdinamentoRegistro()" class="bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer">
+                        <option value="capogruppo">Capogruppo (A-Z)</option>
+                        <option value="tavoli">Tavoli Assegnati</option>
+                    </select>
+                </div>
+            </div>
+            <div class="overflow-x-auto bg-white rounded-lg border border-gray-200">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 text-gray-500 font-semibold uppercase text-xs border-b border-gray-200">
+                            <th class="px-4 py-3">Capogruppo</th>
+                            <th class="px-4 py-3">Ospiti</th>
+                            <th class="px-4 py-3">Tavoli Assegnati</th>
+                            <th class="px-4 py-3 text-right">Azioni</th>
+                        </tr>
+                    </thead>
+                    <tbody id="registro-prenotazioni-corpo" class="divide-y divide-gray-200">
+                        <!-- Popolato via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Logica di Controllo Applicativa e Sblocco Asincrono PDF -->
+    <script>
+        // Stato Globale dell'applicazione
+        let statoApp = {
+            capienzaMax: 6,
+            verandaAttiva: false,
+            prenotazioni: [],
+            tavoliSelezionati: [],
+            ordinamentoRegistro: 'capogruppo' // 'capogruppo' | 'tavoli'
+        };
+
+        const TOT_TAVOLI_SALA = 20;
+        const TOT_TAVOLI_VERANDA = 4;
+
+        // Inizializzazione della pagina e caricamento persistenza locale
+        window.addEventListener('DOMContentLoaded', () => {
+            caricaDaLocalStorage();
+            renderizzaTavoliGrafici();
+            aggiornaInterfaccia();
+        });
+
+        // Memorizzazione persistente client-side nativa
+        function salvaSuLocalStorage() {
+            localStorage.setItem('gestioneTavoli_stato', JSON.stringify(statoApp));
+        }
+
+        function caricaDaLocalStorage() {
+            const datiSalvati = localStorage.getItem('gestioneTavoli_stato');
+            if (datiSalvati) {
+                try {
+                    statoApp = JSON.parse(datiSalvati);
+                    // Riconfigura i controlli grafici sulla base dei dati salvati
+                    document.getElementById('check-veranda').checked = statoApp.verandaAttiva;
+                    const radioCapienza = document.querySelectorAll(`input[name="capienza-max"]`);
+                    radioCapienza.forEach(r => {
+                        if (parseInt(r.value) === statoApp.capienzaMax) r.checked = true;
+                    });
+                    // Ripristina ordinamento registro (default se assente)
+                    if (!statoApp.ordinamentoRegistro) statoApp.ordinamentoRegistro = 'capogruppo';
+                    const selectOrd = document.getElementById('ordinamento-registro');
+                    if (selectOrd) selectOrd.value = statoApp.ordinamentoRegistro;
+                } catch (e) {
+                    console.error("Errore nel parsing dei dati del localStorage", e);
+                }
+            }
+        }
+
+        // Cambia criterio di ordinamento del registro prenotazioni
+        function cambiaOrdinamentoRegistro() {
+            const select = document.getElementById('ordinamento-registro');
+            statoApp.ordinamentoRegistro = select.value;
+            salvaSuLocalStorage();
+            aggiornaInterfaccia();
+        }
+
+        // Calcolo dinamico dello stato di occupazione effettivo di ogni singolo tavolo
+        function calcolaMappaOccupazioneTavoli(escludiPrenotazioneId = null) {
+            let mappa = {};
+            const maxTavoliTotali = TOT_TAVOLI_SALA + TOT_TAVOLI_VERANDA;
+            for (let i = 1; i <= maxTavoliTotali; i++) {
+                mappa[i] = 0; // Inizialmente tutti i posti sono liberi (0 occupati)
+            }
+
+            statoApp.prenotazioni.forEach(p => {
+                if (escludiPrenotazioneId && p.id === escludiPrenotazioneId) return;
+                if (p.ripartizione) {
+                    Object.keys(p.ripartizione).forEach(tId => {
+                        if (mappa[tId] !== undefined) {
+                            mappa[tId] += p.ripartizione[tId];
+                        }
+                    });
+                }
+            });
+            return mappa;
+        }
+
+        // Renderizza visivamente i blocchi di tavoli basandosi sulla geometria richiesta
+        function renderizzaTavoliGrafici() {
+            const bloccoSinistro = document.getElementById('blocco-sinistro');
+            const bloccoDestro = document.getElementById('blocco-destro');
+            const bloccoVeranda = document.getElementById('blocco-veranda');
+
+            bloccoSinistro.innerHTML = '';
+            bloccoDestro.innerHTML = '';
+            bloccoVeranda.innerHTML = '';
+
+            const mappaOccupazione = calcolaMappaOccupazioneTavoli(document.getElementById('edit-id').value || null);
+
+            // Blocco Sinistro: Tavoli da 1 a 8 disposti su 4 file per 2 colonne
+            // Ordinamento geometrico per righe: riga1 (1,2), riga2 (3,4), riga3 (5,6), riga4 (7,8)
+            for (let i = 1; i <= 8; i++) {
+                bloccoSinistro.appendChild(creaElementoTavoloHTML(i, mappaOccupazione[i]));
+            }
+
+            // Blocco Destro: Tavoli da 9 a 20 disposti su 4 file per 3 colonne
+            // Ordinamento geometrico per righe: riga1 (9,10,11), riga2 (12,13,14), riga3 (15,16,17), riga4 (18,19,20)
+            for (let i = 9; i <= 20; i++) {
+                bloccoDestro.appendChild(creaElementoTavoloHTML(i, mappaOccupazione[i]));
+            }
+
+            // Blocco Veranda: Fila unica in basso da 4 tavoli (tavoli da 21 a 24)
+            for (let i = 21; i <= 24; i++) {
+                bloccoVeranda.appendChild(creaElementoTavoloHTML(i, mappaOccupazione[i]));
+            }
+        }
+
+        // Fabbrica HTML per il singolo elemento Tavolo con stili condizionali dinamici
+        function creaElementoTavoloHTML(id, postiOccupati) {
+            const div = document.createElement('div');
+            div.dataset.id = id;
+            
+            const isSelezionato = statoApp.tavoliSelezionati.includes(id);
+            const postiLiberi = statoApp.capienzaMax - postiOccupati;
+
+            let bgStyle = "bg-white border-gray-300 text-gray-900";
+            let statoTesto = "Vuoto";
+
+            if (isSelezionato) {
+                bgStyle = "bg-blue-500 border-blue-600 text-white shadow-md ring-2 ring-blue-300";
+                statoTesto = "Selezionato";
+            } else if (postiOccupati > 0) {
+                if (postiLiberi <= 0) {
+                    bgStyle = "bg-red-500 border-red-600 text-white";
+                    statoTesto = "Pieno";
+                } else {
+                    bgStyle = "bg-yellow-400 border-yellow-500 text-gray-900";
+                    statoTesto = `Parziale (-${postiLiberi})`;
+                }
+            }
+
+            div.className = `table-cell border-2 rounded-xl p-3 flex flex-col justify-between items-center text-center cursor-pointer select-none h-16 min-w-[75px] ${bgStyle}`;
+            div.onclick = () => gestioneClickTavolo(id, postiLiberi);
+
+            div.innerHTML = `
+                <span class="text-xs font-bold block">Tavolo ${id}</span>
+                <span class="text-[9px] uppercase font-semibold opacity-80 block">${statoTesto}</span>
+            `;
+            return div;
+        }
+
+        // Gestione del click sulla griglia dei tavoli (Selezione multipla attiva)
+        function gestioneClickTavolo(id, postiLiberi) {
+            // Se il tavolo è già pieno e non fa parte della selezione corrente, blocca
+            if (postiLiberi <= 0 && !statoApp.tavoliSelezionati.includes(id)) {
+                alert(`Il Tavolo ${id} è già completamente pieno!`);
+                return;
+            }
+
+            const index = statoApp.tavoliSelezionati.indexOf(id);
+            if (index > -1) {
+                statoApp.tavoliSelezionati.splice(index, 1); // Rimuovi se già selezionato
+            } else {
+                statoApp.tavoliSelezionati.push(id); // Aggiungi alla multi-selezione
+            }
+
+            renderizzaTavoliGrafici();
+            aggiornaListaTavoliSelezionatiTesto();
+            aggiornaValidazionePosti();
+        }
+
+        function aggiornaListaTavoliSelezionatiTesto() {
+            const contenitore = document.getElementById('tavoli-selezionati-lista');
+            if (statoApp.tavoliSelezionati.length === 0) {
+                contenitore.innerText = "Nessuno";
+                contenitore.className = "text-sm font-semibold text-gray-500 bg-gray-100 px-3 py-2 rounded-lg inline-block";
+            } else {
+                contenitore.innerText = statoApp.tavoliSelezionati.sort((a,b)=>a-b).map(id => `Tavolo ${id}`).join(', ');
+                contenitore.className = "text-sm font-semibold text-blue-600 bg-blue-50 px-3 py-2 rounded-lg inline-block";
+            }
+        }
+
+        // Calcolo anti-overbooking in tempo reale durante la digitazione / selezione
+        function aggiornaValidazionePosti() {
+            const numPersone = parseInt(document.getElementById('num-persone').value) || 0;
+            const validazioneBox = document.getElementById('validazione-posti-box');
+            
+            if (numPersone <= 0 || statoApp.tavoliSelezionati.length === 0) {
+                validazioneBox.className = "hidden";
+                return;
+            }
+
+            const mappaOccupazione = calcolaMappaOccupazioneTavoli(document.getElementById('edit-id').value || null);
+            let totalePostiDisponibiliNeiTavoliScelti = 0;
+
+            statoApp.tavoliSelezionati.forEach(tId => {
+                const postiOccupati = mappaOccupazione[tId] || 0;
+                totalePostiDisponibiliNeiTavoliScelti += Math.max(0, statoApp.capienzaMax - postiOccupati);
+            });
+
+            validazioneBox.classList.remove('hidden');
+            if (numPersone <= totalePostiDisponibiliNeiTavoliScelti) {
+                validazioneBox.className = "p-2.5 rounded-lg font-medium text-xs bg-green-50 border border-green-200 text-green-700";
+                validazioneBox.innerHTML = `✔ Posti selezionati sufficienti per coprire il gruppo! (Disponibili nei tavoli scelti: ${totalePostiDisponibiliNeiTavoliScelti} posti)`;
+            } else {
+                validazioneBox.className = "p-2.5 rounded-lg font-medium text-xs bg-red-50 border border-red-200 text-red-700";
+                validazioneBox.innerHTML = `⚠ Posti insufficienti! Il gruppo richiede ${numPersone} posti, ma i tavoli selezionati hanno solo ${totalePostiDisponibiliNeiTavoliScelti} posti liberi totali. Seleziona altri tavoli.`;
+            }
+        }
+
+        // Logica di salvataggio (Inserimento o Modifica) con allocazione controllata anti-overbooking
+        function salvaPrenotazione(event) {
+            event.preventDefault();
+            const capogruppo = document.getElementById('capogruppo').value.trim();
+            const numPersone = parseInt(document.getElementById('num-persone').value);
+            const editId = document.getElementById('edit-id').value;
+
+            if (statoApp.tavoliSelezionati.length === 0) {
+                alert("Seleziona almeno un tavolo sulla mappa per poter inserire o salvare la prenotazione!");
+                return;
+            }
+
+            const mappaOccupazione = calcolaMappaOccupazioneTavoli(editId || null);
+            let postiDisponibiliSuiTavoliSelezionati = 0;
+            let ripartizioneDisponibile = {};
+
+            statoApp.tavoliSelezionati.forEach(tId => {
+                const occupati = mappaOccupazione[tId] || 0;
+                const liberi = Math.max(0, statoApp.capienzaMax - occupati);
+                if (liberi > 0) {
+                    postiDisponibiliSuiTavoliSelezionati += liberi;
+                    ripartizioneDisponibile[tId] = liberi;
+                }
+            });
+
+            // Rigoroso Blocco Anti-Overbooking preventivo
+            if (numPersone > postiDisponibiliSuiTavoliSelezionati) {
+                alert(`Impossibile inserire la prenotazione: OVERBOOKING BLOCCATO.
+Il gruppo richiede ${numPersone} posti, ma i tavoli selezionati dispongono complessivamente di soli ${postiDisponibiliSuiTavoliSelezionati} posti liberi.`);
+                return;
+            }
+
+            // Algoritmo di distribuzione automatica ed omogenea delle persone sui tavoli selezionati
+            let personeDaAllocare = numPersone;
+            let ripartizioneEffettiva = {};
+
+            const tavoliOrdinati = [...statoApp.tavoliSelezionati].sort((a,b) => a - b);
+            for (let tId of tavoliOrdinati) {
+                if (personeDaAllocare <= 0) break;
+                const spazioDisponibile = ripartizioneDisponibile[tId] || 0;
+                if (spazioDisponibile > 0) {
+                    const allocatiSuQuestoTavolo = Math.min(personeDaAllocare, spazioDisponibile);
+                    ripartizioneEffettiva[tId] = allocatiSuQuestoTavolo;
+                    personeDaAllocare -= allocatiSuQuestoTavolo;
+                }
+            }
+
+            if (editId) {
+                // Flusso di Aggiornamento della prenotazione esistente
+                const index = statoApp.prenotazioni.findIndex(p => p.id === editId);
+                if (index > -1) {
+                    statoApp.prenotazioni[index].capogruppo = capogruppo;
+                    statoApp.prenotazioni[index].persone = numPersone;
+                    statoApp.prenotazioni[index].tavoli = tavoliOrdinati;
+                    statoApp.prenotazioni[index].ripartizione = ripartizioneEffettiva;
+                }
+            } else {
+                // Flusso di Inserimento della nuova prenotazione
+                const nuovaPrenotazione = {
+                    id: 'pren_' + Date.now(),
+                    capogruppo: capogruppo,
+                    persone: numPersone,
+                    tavoli: tavoliOrdinati,
+                    ripartizione: ripartizioneEffettiva
+                };
+                statoApp.prenotazioni.push(nuovaPrenotazione);
+            }
+
+            // Reset del modulo, salvataggio persistente e re-render completo
+            statoApp.tavoliSelezionati = [];
+            document.getElementById('form-prenotazione').reset();
+            document.getElementById('edit-id').value = "";
+            document.getElementById('titolo-form').innerHTML = "👤 Nuova Prenotazione";
+            
+            salvaSuLocalStorage();
+            renderizzaTavoliGrafici();
+            aggiornaInterfaccia();
+            aggiornaListaTavoliSelezionatiTesto();
+            document.getElementById('validazione-posti-box').className = "hidden";
+        }
+
+        // Predisposizione del form per la modifica di un gruppo
+        function avviaModificaPrenotazione(id) {
+            const prenotazione = statoApp.prenotazioni.find(p => p.id === id);
+            if (!prenotazione) return;
+
+            document.getElementById('edit-id').value = prenotazione.id;
+            document.getElementById('capogruppo').value = prenotazione.capogruppo;
+            document.getElementById('num-persone').value = prenotazione.persone;
+            document.getElementById('titolo-form').innerHTML = `📝 Modifica Gruppo: <span class="text-blue-600 ml-1">${prenotazione.capogruppo}</span>`;
+
+            // Carica i tavoli precedentemente assegnati nella selezione corrente per evidenziarli
+            statoApp.tavoliSelezionati = [...prenotazione.tavoli];
+            
+            renderizzaTavoliGrafici();
+            aggiornaListaTavoliSelezionatiTesto();
+            aggiornaValidazionePosti();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancellaPrenotazione(id) {
+            if (confirm("Sei sicuro di voler rimuovere questa prenotazione? I relativi posti sui tavoli saranno liberati immediatamente.")) {
+                statoApp.prenotazioni = statoApp.prenotazioni.filter(p => p.id !== id);
+                if (document.getElementById('edit-id').value === id) {
+                    annullaModifica();
+                }
+                salvaSuLocalStorage();
+                renderizzaTavoliGrafici();
+                aggiornaInterfaccia();
+            }
+        }
+
+        function annullaModifica() {
+            document.getElementById('form-prenotazione').reset();
+            document.getElementById('edit-id').value = "";
+            document.getElementById('titolo-form').innerHTML = "👤 Nuova Prenotazione";
+            statoApp.tavoliSelezionati = [];
+            renderizzaTavoliGrafici();
+            aggiornaListaTavoliSelezionatiTesto();
+            document.getElementById('validazione-posti-box').className = "hidden";
+        }
+
+        // Funzione per mostrare/nascondere dinamicamente l'area veranda
+        function toggleVeranda() {
+            const check = document.getElementById('check-veranda');
+            statoApp.verandaAttiva = check.checked;
+            
+            const wrapper = document.getElementById('wrapper-veranda');
+            if (statoApp.verandaAttiva) {
+                wrapper.classList.remove('hidden');
+            } else {
+                wrapper.classList.add('hidden');
+                // Se la veranda viene spenta, rimuove eventuali selezioni attive sui tavoli 21-24
+                statoApp.tavoliSelezionati = statoApp.tavoliSelezionati.filter(id => id <= 20);
+                aggiornaListaTavoliSelezionatiTesto();
+            }
+            
+            salvaSuLocalStorage();
+            renderizzaTavoliGrafici();
+            aggiornaInterfaccia();
+        }
+
+        /**
+         * Cambia la capienza massima per singolo tavolo (6 o 8 posti) in modo automatico e intelligente.
+         * - Aumento (6 → 8): le assegnazioni restano intatte, aumenta solo la disponibilità.
+         * - Diminuzione (8 → 6): se un tavolo risulta occupato oltre la nuova capienza
+         *   (anche per coabitazione), viene forzata la riassegnazione dell'INTERA prenotazione
+         *   che occupa quel tavolo. I dati anagrafici del gruppo vengono preservati.
+         */
+        function cambiaCapienza(nuovaCapienza) {
+            const vecchiaCapienza = statoApp.capienzaMax;
+            if (nuovaCapienza === vecchiaCapienza) return;
+
+            statoApp.capienzaMax = nuovaCapienza;
+
+            let prenotazioniDaRiassegnare = 0;
+
+            // Solo in caso di DIMINUZIONE della capienza controlliamo i tavoli in overbooking
+            if (nuovaCapienza < vecchiaCapienza) {
+                const mappaOccupazione = calcolaMappaOccupazioneTavoli();
+                const tavoliInOverbooking = new Set();
+
+                // Individua i tavoli il cui totale occupato supera la nuova capienza
+                for (let tId = 1; tId <= (TOT_TAVOLI_SALA + TOT_TAVOLI_VERANDA); tId++) {
+                    if ((mappaOccupazione[tId] || 0) > nuovaCapienza) {
+                        tavoliInOverbooking.add(String(tId));
+                    }
+                }
+
+                if (tavoliInOverbooking.size > 0) {
+                    // Raccogli le prenotazioni che contribuiscono a quei tavoli
+                    // e forza la riassegnazione dell'intera prenotazione
+                    statoApp.prenotazioni.forEach(p => {
+                        if (!p.ripartizione) return;
+                        const toccaTavoloOver = Object.keys(p.ripartizione).some(tId => tavoliInOverbooking.has(String(tId)));
+                        if (toccaTavoloOver) {
+                            p.tavoli = [];
+                            p.ripartizione = {};
+                            prenotazioniDaRiassegnare++;
+                        }
+                    });
+                }
+            }
+            // In caso di AUMENTO della capienza non si tocca nulla: la disponibilità cresce automaticamente
+
+            // Pulisci eventuale selezione corrente
+            statoApp.tavoliSelezionati = [];
+
+            // Mostra avviso solo se sono state rese da riassegnare delle prenotazioni
+            const alertBox = document.getElementById('alert-reset-capienza');
+            if (prenotazioniDaRiassegnare > 0) {
+                alertBox.classList.remove('hidden');
+                alertBox.innerHTML = `⚠ ${prenotazioniDaRiassegnare} prenotazione/i sono state rese da riassegnare perché superavano la nuova capienza dei tavoli. Riassegna i gruppi sotto.`;
+                setTimeout(() => alertBox.classList.add('hidden'), 12000);
+            } else {
+                alertBox.classList.add('hidden');
+            }
+
+            annullaModifica();
+            salvaSuLocalStorage();
+            renderizzaTavoliGrafici();
+            aggiornaInterfaccia();
+        }
+
+        // Esegue il wipe completo dei dati unicamente dietro comando esplicito dell'operatore
+        function azzerareTutteLePrenotazioni() {
+            if (confirm("🚨 ATTENZIONE: Questa azione cancellerà definitivamente tutte le prenotazioni correnti e svuoterà l'intera memoria del browser. Vuoi procedere?")) {
+                statoApp.prenotazioni = [];
+                statoApp.tavoliSelezionati = [];
+                annullaModifica();
+                salvaSuLocalStorage();
+                renderizzaTavoliGrafici();
+                aggiornaInterfaccia();
+            }
+        }
+
+        // Aggiorna i conteggi del riepilogo statistico e renderizza la tabella del registro
+        function aggiornaInterfaccia() {
+            const wrapperVeranda = document.getElementById('wrapper-veranda');
+            if (statoApp.verandaAttiva) {
+                wrapperVeranda.classList.remove('hidden');
+            } else {
+                wrapperVeranda.classList.add('hidden');
+            }
+
+            // Calcolo posti occupati complessivi
+            let totaliOccupati = 0;
+            statoApp.prenotazioni.forEach(p => totaliOccupati += p.persone);
+            document.getElementById('stat-posti-occupati').innerText = totaliOccupati;
+
+            // Conteggio dei tavoli completamente liberi
+            const mappaOccupazione = calcolaMappaOccupazioneTavoli();
+            let tavoliLiberiConteggio = 0;
+            const limiteTavoliMax = statoApp.verandaAttiva ? (TOT_TAVOLI_SALA + TOT_TAVOLI_VERANDA) : TOT_TAVOLI_SALA;
+
+            for (let i = 1; i <= limiteTavoliMax; i++) {
+                if ((mappaOccupazione[i] || 0) === 0) {
+                    tavoliLiberiConteggio++;
+                }
+            }
+            document.getElementById('stat-tavoli-liberi').innerText = `${tavoliLiberiConteggio}/${limiteTavoliMax}`;
+
+            // Renderizzazione righe del registro storico attivo (con ordinamento)
+            const corpoTabella = document.getElementById('registro-prenotazioni-corpo');
+            corpoTabella.innerHTML = '';
+
+            if (statoApp.prenotazioni.length === 0) {
+                corpoTabella.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-4 py-6 text-center text-gray-400 italic bg-gray-50/50">
+                            Nessuna prenotazione attiva registrata nel sistema.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // Copia e ordina le prenotazioni secondo il criterio scelto
+            const prenotazioniOrdinate = [...statoApp.prenotazioni];
+
+            if (statoApp.ordinamentoRegistro === 'tavoli') {
+                // Ordina per numero del primo tavolo assegnato (crescente).
+                // I gruppi senza tavoli vanno in fondo.
+                prenotazioniOrdinate.sort((a, b) => {
+                    const minA = (a.tavoli && a.tavoli.length > 0) ? Math.min(...a.tavoli) : Infinity;
+                    const minB = (b.tavoli && b.tavoli.length > 0) ? Math.min(...b.tavoli) : Infinity;
+                    if (minA !== minB) return minA - minB;
+                    // A parità di tavolo, ordina per nome
+                    return (a.capogruppo || '').localeCompare(b.capogruppo || '', 'it', { sensitivity: 'base' });
+                });
+            } else {
+                // Default: Capogruppo A-Z (italiano)
+                prenotazioniOrdinate.sort((a, b) => {
+                    return (a.capogruppo || '').localeCompare(b.capogruppo || '', 'it', { sensitivity: 'base' });
+                });
+            }
+
+            prenotazioniOrdinate.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50/80 transition text-gray-700";
+
+                let stringaTavoliDettaglio = "Nessun tavolo assegnato (Riassegnare)";
+                if (p.tavoli && p.tavoli.length > 0) {
+                    stringaTavoliDettaglio = p.tavoli.map(tId => {
+                        const personeSuTavolo = p.ripartizione ? p.ripartizione[tId] : 0;
+                        return `Tavolo ${tId} (${personeSuTavolo}p)`;
+                    }).join(', ');
+                }
+
+                tr.innerHTML = `
+                    <td class="px-4 py-3 font-semibold text-gray-900">${p.capogruppo}</td>
+                    <td class="px-4 py-3 font-medium"><span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full font-bold">${p.persone} Ospiti</span></td>
+                    <td class="px-4 py-3 text-xs text-blue-700 font-semibold">${stringaTavoliDettaglio}</td>
+                    <td class="px-4 py-3 text-right space-x-2 shrink-0 whitespace-nowrap">
+                        <button onclick="avviaModificaPrenotazione('${p.id}')" class="text-blue-600 hover:text-blue-800 font-semibold text-xs border border-blue-200 px-2 py-1 rounded bg-blue-50/50 hover:bg-blue-50 transition cursor-pointer">Modifica</button>
+                        <button onclick="cancellaPrenotazione('${p.id}')" class="text-red-600 hover:text-red-800 font-semibold text-xs border border-red-200 px-2 py-1 rounded bg-red-50/50 hover:bg-red-50 transition cursor-pointer">Elimina</button>
+                    </td>
+                `;
+                corpoTabella.appendChild(tr);
+            });
+        }
+
+        // FIX DEFINITIVO BLOCCO PDF: Motore di esportazione asincrono non bloccante nativo
+        async function generaPDFCompleto() {
+            const statusLabel = document.getElementById('status-generazione');
+            
+            // 1. Mostriamo istantaneamente l'avviso visivo a schermo
+            statusLabel.classList.remove('hidden');
+            
+            // 2. TRUCCO CRUCIALE: Rilasciamo l'Event Loop con una micro-task asincrona (150ms).
+            // Questo permette al browser di eseguire il reflow/repaint grafico e visualizzare la scritta
+            // di attesa PRIMA che la CPU inizi il calcolo intensivo dell'immagine HTML5 Canvas,
+            // azzerando totalmente qualsiasi freeze o blocco visivo dell'applicazione.
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            try {
+                // Seleziona il body intero per stampare sia il layout planimetrico che il registro
+                const elementoTarget = document.body; 
+
+                const opzioniEsportazione = {
+                    margin:       0.3,
+                    filename:     'Report_Completo_Gestione_Tavoli.pdf',
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' } // Landscape ideale per mappe 18m
+                };
+
+                // Eseguiamo il rendering asincrono nativo tramite Promise senza interrompere le selezioni
+                await html2pdf().set(opzioniEsportazione).from(elementoTarget).save();
+                
+            } catch (errore) {
+                console.error("Errore riscontrato durante l'esportazione del PDF:", errore);
+                alert("Si è verificato un errore durante la compilazione grafica del file PDF.");
+            } finally {
+                // Nascondiamo l'avviso a generazione completata
+                statusLabel.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
